@@ -3,7 +3,7 @@ name = "tidepool"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "A Simple Rust Written Web-Server after learning Rust"
+description = "A Simple Rust Written Web-Server After Learning Rust"
 keywords = ["http", "webserver", "learning", "project", "rust"]
 categories = ["web-programming::http-server", "development-tools"]
 
