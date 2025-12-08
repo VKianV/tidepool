@@ -16,3 +16,5 @@ A Simple Rust Written Web-Server after learning Rust
 git clone https://github.com/VkianV/tidepool.git
 cd tidepool
 cargo run --release
+```
+the binary of this project is also avaliable in the release section of this page.
