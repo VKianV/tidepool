@@ -10,7 +10,7 @@ fn main() {
 
     for stream in listener.incoming() {
         let stream = stream.expect("failed to read the stream");
-        println!("incoming water request");
+        println!("incoming request");
 
         thread::spawn(|| handle_connection(stream));
     }
