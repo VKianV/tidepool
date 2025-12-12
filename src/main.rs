@@ -1,4 +1,8 @@
-use std::{fs, io::{BufRead, BufReader, Write}, net::{TcpListener, TcpStream}};
+use std::{
+    fs,
+    io::{BufRead, BufReader, Write},
+    net::{TcpListener, TcpStream},
+};
 
 fn main() {
     // ToDo: try a couple more times to connect and don't panic for a few times.
@@ -19,10 +23,17 @@ fn handle_connection(mut stream: TcpStream) {
         .map(|result| result.expect("Failed to read http request lines"))
         .take_while(|line| !line.is_empty())
         .collect();
-    let status_line = "HTTP/1.1 200 OK\r\n\r\n";
-    let contents = fs::read_to_string("htmls/hello.html").expect("failed to read the html file.");
-    let length = contents.len();
-    let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
 
-    stream.write_all(response.as_bytes()).expect("failed to write to stream");
+    let status_line = "HTTP/1.1 200 OK";
+
+    let body = fs::read_to_string("htmls/hello.html").expect("failed to read the html file.");
+    let body_length = body.len();
+
+    let header = format!("Content-Length: {body_length}");
+    
+    let response = format!("{status_line}\n{header}\n\n{body}");
+
+    stream
+        .write_all(response.as_bytes())
+        .expect("failed to write to stream");
 }
