@@ -7,11 +7,12 @@ fn main() {
     // ToDo: try a couple more times to connect and don't panic for a few times.
     let listener = TcpListener::bind("127.0.0.1:7878")
         .expect("failed to bind to the local address. the port is probably busy");
+    let pool = ThreadPool::new(4);
 
     for stream in listener.incoming() {
         let stream = stream.expect("failed to read the stream");
         println!("incoming request");
 
-        thread::spawn(|| handle_connection(stream));
+        pool.execute(|| handle_connection(stream));
     }
 }
