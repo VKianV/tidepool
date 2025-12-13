@@ -1,5 +1,5 @@
 use riotpool::ThreadPool;
-use std::{net::TcpListener, thread};
+use std::net::TcpListener;
 use tidepool::handle_connection;
 
 fn main() {
