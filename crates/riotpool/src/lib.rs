@@ -18,11 +18,11 @@ impl ThreadPool {
     pub fn new(size: usize) -> Self {
         assert!(size > 0);
 
-        let (sender, receiver) = mpsc::channel();
+        let mut workers = Vec::with_capacity(size);
 
+        let (sender, receiver) = mpsc::channel();
         let receiver = Arc::new(Mutex::new(receiver));
 
-        let mut workers = Vec::with_capacity(size);
 
         for id in 1..=size {
             workers.push(Worker::new(id, Arc::clone(&receiver)));
