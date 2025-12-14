@@ -1,9 +1,9 @@
 use std::{
     fs,
-    io::{BufRead, BufReader, Write},
-    net::TcpStream,
+    io::{self, BufRead, BufReader, Write},
+    net::{SocketAddrV4, TcpListener, TcpStream},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 pub fn handle_connection(mut stream: TcpStream) {
@@ -32,4 +32,22 @@ pub fn handle_connection(mut stream: TcpStream) {
     stream
         .write_all(response.as_bytes())
         .expect("failed to write to stream");
+}
+
+pub fn bind_with_retry(
+    timeout: Duration,
+    local_host: SocketAddrV4,
+) -> Result<TcpListener, io::Error> {
+    let start = Instant::now();
+    loop {
+        match TcpListener::bind(format!("{}:{}", local_host.ip(), local_host.port())) {
+            Ok(listener) => return Ok(listener),
+            Err(e) => {
+                if start.elapsed() >= timeout {
+                    return Err(e);
+                }
+                thread::sleep(Duration::from_millis(300));
+            }
+        }
+    }
 }

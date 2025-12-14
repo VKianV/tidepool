@@ -1,11 +1,21 @@
 use riotpool::ThreadPool;
-use std::net::TcpListener;
-use tidepool::handle_connection;
+use std::{
+    net::{Ipv4Addr, SocketAddrV4},
+    time::Duration,
+};
+use tidepool::{bind_with_retry, handle_connection};
 
 fn main() {
-    println!("tidepool has started listening for connections on 127.0.0.1:7878 address");
-    // ToDo: try a couple more times to connect and don't panic for a few times.
-    let listener = TcpListener::bind("127.0.0.1:7878")
+    let local_host = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 7878);
+    let timeout = Duration::from_secs(5);
+
+    println!(
+        "tidepool has started listening for connections on {}:{} address",
+        local_host.ip(),
+        local_host.port()
+    );
+
+    let listener = bind_with_retry(timeout, local_host)
         .expect("failed to bind to the local address. the port is probably busy");
     let pool = ThreadPool::new(4);
 
