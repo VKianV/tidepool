@@ -1,7 +1,7 @@
 #![feature(mpmc_channel)]
-use std::{thread, sync::{mpmc, Arc, Mutex}};
+use std::{thread, sync::{mpmc}};
 
-struct Job;
+type Job = Box<dyn FnOnce() + Send + 'static>;
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
@@ -35,6 +35,9 @@ impl ThreadPool {
     where
         F: FnOnce() + Send + 'static,
     {
+        let job = Box::new(f);
+
+        self.sender.send(job).expect("sending job to worker failed");
     }
 }
 
@@ -45,8 +48,16 @@ struct Worker {
 
 impl Worker {
     fn new(id: usize, receiver: mpmc::Receiver<Job> ) -> Self {
-        let thread = thread::spawn(|| {
-            receiver;
+        let thread = thread::spawn(move || {
+            loop {
+                let job = receiver
+                    .recv()
+                    .expect("failed to receive the job");
+
+                println!("Worker {} got a job; executing.", id);
+
+                job();
+            }
         });
 
         Self { id, thread }
