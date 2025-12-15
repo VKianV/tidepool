@@ -7,7 +7,7 @@ use tidepool::{bind_with_retry, handle_connection};
 
 fn main() {
     let local_host = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 7878);
-    let timeout = Duration::from_secs(5);
+    let timeout = Duration::from_secs(8);
 
     println!(
         "tidepool has started listening for connections on {}:{} address",
