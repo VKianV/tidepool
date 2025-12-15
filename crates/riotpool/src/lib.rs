@@ -3,11 +3,11 @@ use std::{
     thread,
 };
 
-struct Job;
+type Job = Box<dyn FnOnce() + Send + 'static>;
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Job>,
+    sender: mpsc::Sender<Box<dyn FnOnce() + Send + 'static>>,
 }
 
 impl ThreadPool {
@@ -37,6 +37,9 @@ impl ThreadPool {
     where
         F: FnOnce() + Send + 'static,
     {
+        let job = Box::new(f);
+
+        self.sender.send(job).expect("sending job to worker failed");
     }
 }
 
@@ -47,8 +50,18 @@ struct Worker {
 
 impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Self {
-        let thread = thread::spawn(|| {
-            receiver;
+        let thread = thread::spawn(move || {
+            loop {
+                let job = receiver
+                    .lock()
+                    .expect("failed to acquire the lock")
+                    .recv()
+                    .expect("failed to receive the job");
+
+                println!("Worker {} got a job; executing.", id);
+
+                job();
+            }
         });
 
         Self { id, thread }
