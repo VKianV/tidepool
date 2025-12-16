@@ -7,7 +7,7 @@ type Job = Box<dyn FnOnce() + Send + 'static>;
 
 pub struct ThreadPool {
     workers: Vec<Worker>,
-    sender: mpsc::Sender<Box<dyn FnOnce() + Send + 'static>>,
+    sender: mpsc::Sender<Job>,
 }
 
 impl ThreadPool {
