@@ -5,6 +5,7 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+use std::net::Ipv4Addr;
 
 pub fn handle_connection(mut stream: TcpStream) {
     let request_line = BufReader::new(&stream)
@@ -50,4 +51,17 @@ pub fn bind_with_retry(
             }
         }
     }
+}
+
+pub fn initializing(port: u16, number_of_threads: usize) -> (SocketAddrV4, Duration, usize) {
+    let local_host = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    let timeout = Duration::from_secs(5);
+
+    println!(
+        "tidepool has started listening for connections on {}:{} address",
+        local_host.ip(),
+        local_host.port()
+    );
+
+    (local_host, timeout, number_of_threads)
 }
