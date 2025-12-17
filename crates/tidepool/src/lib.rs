@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::{self, BufRead, BufReader, Write},
-    net::{SocketAddrV4, TcpListener, TcpStream, Ipv4Addr},
+    net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
     thread,
     time::{Duration, Instant},
 };
