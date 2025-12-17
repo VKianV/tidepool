@@ -8,10 +8,10 @@
 //! This crate is intended to be used alongside the `riotpool` an in house thread pool.
 
 use std::{
-    path::Path,
     fs,
     io::{self, BufRead, BufReader, Write},
     net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
+    path::Path,
     thread,
     time::{Duration, Instant},
 };
@@ -45,42 +45,45 @@ pub fn handle_connection(mut stream: TcpStream) {
         .expect("failed to read from stream");
 
     let full_path;
-    let (status_line, filename) = if request_line.starts_with("GET ") && request_line.ends_with(" HTTP/1.1") {
-        let path = request_line[4..request_line.len() - 9].trim(); // extract /path
+    let (status_line, filename) =
+        if request_line.starts_with("GET ") && request_line.ends_with(" HTTP/1.1") {
+            let path = request_line[4..request_line.len() - 9].trim(); // extract /path
 
-        if path == "/" || path.is_empty() {
-            ("HTTP/1.1 200 OK", "public/index.html")
-        } else if path == "/sleep" {
-            thread::sleep(Duration::from_secs(5));
-            ("HTTP/1.1 200 OK", "public/index.html")
-        } else {
-            // Serve any other file from the "public" directory
-            let sanitized_path = if path.starts_with('/') { &path[1..] } else { path };
-
-            // Basic security: prevent directory traversal
-            if sanitized_path.contains("..") || sanitized_path.contains('\\') {
-                ("HTTP/1.1 400 BAD REQUEST", "public/400.html")
+            if path == "/" || path.is_empty() {
+                ("HTTP/1.1 200 OK", "public/index.html")
+            } else if path == "/sleep" {
+                thread::sleep(Duration::from_secs(5));
+                ("HTTP/1.1 200 OK", "public/index.html")
             } else {
-                 full_path = format!("public/{}", sanitized_path);
-
-                // If file exists → serve it, else 404
-                if Path::new(&full_path).exists() {
-                    ("HTTP/1.1 200 OK", full_path.as_str())
+                // Serve any other file from the "public" directory
+                let sanitized_path = if path.starts_with('/') {
+                    &path[1..]
                 } else {
-                    ("HTTP/1.1 404 NOT FOUND", "public/404.html")
+                    path
+                };
+
+                // Basic security: prevent directory traversal
+                if sanitized_path.contains("..") || sanitized_path.contains('\\') {
+                    ("HTTP/1.1 400 BAD REQUEST", "public/400.html")
+                } else {
+                    full_path = format!("public/{}", sanitized_path);
+
+                    // If file exists → serve it, else 404
+                    if Path::new(&full_path).exists() {
+                        ("HTTP/1.1 200 OK", full_path.as_str())
+                    } else {
+                        ("HTTP/1.1 404 NOT FOUND", "public/404.html")
+                    }
                 }
             }
-        }
-    } else {
-        ("HTTP/1.1 400 BAD REQUEST", "public/400.html")
-    };
+        } else {
+            ("HTTP/1.1 400 BAD REQUEST", "public/400.html")
+        };
 
     // Rest remains the same...
     let body = fs::read_to_string(filename).expect("failed to read the file");
     let body_length = body.len();
-    let response = format!(
-        "{status_line}\r\nContent-Length: {body_length}\r\n\r\n{body}"
-    );
+    let response = format!("{status_line}\r\nContent-Length: {body_length}\r\n\r\n{body}");
 
     stream
         .write_all(response.as_bytes())
@@ -149,3 +152,4 @@ pub fn initializing(port: u16, number_of_threads: usize) -> (SocketAddrV4, Durat
 
     (local_host, timeout, number_of_threads)
 }
+
