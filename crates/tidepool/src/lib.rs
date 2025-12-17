@@ -1,11 +1,10 @@
 use std::{
     fs,
     io::{self, BufRead, BufReader, Write},
-    net::{SocketAddrV4, TcpListener, TcpStream},
+    net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
     thread,
     time::{Duration, Instant},
 };
-use std::net::Ipv4Addr;
 
 pub fn handle_connection(mut stream: TcpStream) {
     let request_line = BufReader::new(&stream)
