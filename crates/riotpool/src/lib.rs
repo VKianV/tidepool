@@ -54,42 +54,44 @@ impl Drop for ThreadPool {
     fn drop(&mut self) {
         drop(self.sender.take());
 
-        for worker in self.workers.drain(..) {
+        for worker in &mut self.workers {
             println!("Shutting down worker {}", worker.id);
 
-            worker
-                .thread
-                .join()
-                .expect("failed to join worker for graceful shutdown");
+            if let Some(thread) = worker.thread.take() {
+                thread.join().expect("failed to join worker");
+            }
         }
     }
 }
 
 struct Worker {
     id: usize,
-    thread: thread::JoinHandle<()>,
+    thread: Option<thread::JoinHandle<()>>,
 }
 
 impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Self {
         let thread = thread::spawn(move || {
             loop {
-                let message = receiver.lock().unwrap().recv();
+                let message = receiver.lock().expect("failed to acquire the lock").recv();
 
                 match message {
                     Ok(job) => {
-                        println!("Worker {id} got a job; executing.");
+                        println!("Worker {} got a job; executing.", id);
 
                         job();
                     }
                     Err(_) => {
-                        println!("Worker {id} disconnected; shutting down.");
+                        println!("Worker {} disconnected; shutting down.", id);
                         break;
                     }
                 }
             }
         });
 
-        Self { id, thread }
+        Self {
+            id,
+            thread: Some(thread),
+        }
     }
 }
