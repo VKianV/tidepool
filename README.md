@@ -1,13 +1,13 @@
 # tidepool 🦀🌊
 
-A Cross-platform, minimal Rust Written multithreaded Web-Server using threadpool
+A Cross-platform, minimal, Rust Written, multithreaded Web-Server using threadpool
 
 ## Features
 
 - Single-threaded → multithreaded with a custom thread pool
 - Serves static files from a `public/` folder in its directory.
 - Graceful shutdown on Ctrl+C
-- Proper HTTP/1.1 responses (200 OK, 404 Not Found, 400 Bad Request, etc.)
+- Proper HTTP/1.1 responses (200 OK, 404 Not Found, 404, etc.)
 - Sleeps 5 seconds on `/sleep` to demonstrate thread pool behavior
 
 ## Usage
