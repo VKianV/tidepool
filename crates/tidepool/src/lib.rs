@@ -7,7 +7,6 @@
 //!
 //! This crate is intended to be used alongside the `riotpool` an in house thread pool.
 
-use std::path::PathBuf;
 use std::{
     collections::HashMap,
     fs,
