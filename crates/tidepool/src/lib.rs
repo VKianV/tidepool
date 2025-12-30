@@ -7,6 +7,7 @@
 //!
 //! This crate is intended to be used alongside the `riotpool` an in house thread pool.
 
+use std::path::PathBuf;
 use std::{
     collections::HashMap,
     fs,
@@ -39,7 +40,7 @@ struct RequestLine {
 
 impl RequestLine {
     fn new(request_line: String) -> Self {
-        let  (mut phrases, http_method, request_uri, http_version);
+        let (mut phrases, http_method, request_uri, http_version);
 
         phrases = request_line.splitn(3, ' ');
 
@@ -224,36 +225,42 @@ impl Response {
 /// tidepool::handle_connection(stream);
 /// ```
 pub fn handle_connection(mut stream: TcpStream) {
-    let (req, uri, mut resp, path);
+    let (req, mut resp, mut path, file, status_line);
 
     req = Request::new(&stream);
-    uri = req.request_line.request_uri;
+    path = PathBuf::from("./public/pages/");
 
-    path = if uri == "/" || uri == "/index" || uri == "/home" {
-        "./public/pages/home/home.html".to_string()
-    } else if uri == "/sleep" {
-        thread::sleep(Duration::from_secs(5));
-        "./public/pages/home/home.html".to_string()
-    } else {
-        "./public/pages/home/".to_string() + uri.trim_start_matches('/')
+    match req.request_line.request_uri.as_str() {
+        "/" | "/home" => {
+            path.push("home/home.html");
+            status_line = "HTTP/1.1 200 Ok"
+        }
+        "/sleep" => {
+            thread::sleep(Duration::from_secs(5));
+            path.push("home/home.html");
+            status_line = "HTTP/1.1 200 OK";
+        }
+        uri => {
+            let address = path.join(uri.trim_start_matches('/'));
+            match address.exists(){
+                true => {
+                    path.push(uri.trim_start_matches('/'));
+                    status_line = "HTTP/1.1 200 OK";
+                }
+                false => {
+                    path.push("status code pages/404.html");
+                    status_line = "HTTP/1.1 404 OK"
+                }
+            };
+        }
     };
+    dbg!("second path is",&path);
 
-    match fs::read_to_string(path) {
-        Ok(content) => {
-            resp = Response::new(String::from("HTTP/1.1 200 OK"));
+    file = fs::read_to_string(path).expect("could not read the file");
 
-            resp.add_header("Content-Length".to_string(), content.len().to_string());
-            resp.add_header("Connection".to_string(), "close".to_string());
-
-            resp.add_body(content);
-        }
-        Err(_) => {
-            resp = Response::new("HTTP/1.1 404 Not Found".to_string());
-            let file_404 = fs::read_to_string("public/pages/status code pages/400.html")
-                .expect("couldn't extract the file");
-            resp.add_body(file_404);
-        }
-    }
+    resp = Response::new(status_line.to_string());
+    resp.add_header("Content-Length".to_string(), file.len().to_string());
+    resp.add_body(file);
 
     resp.send(&mut stream);
 }
