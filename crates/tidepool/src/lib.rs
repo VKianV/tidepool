@@ -13,7 +13,7 @@ use std::{
     fs,
     io::{self, BufRead, BufReader, Write},
     net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
-    path::Path,
+    path::PathBuf,
     thread,
     time::{Duration, Instant},
 };
