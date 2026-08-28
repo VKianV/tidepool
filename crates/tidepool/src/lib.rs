@@ -315,7 +315,7 @@ pub fn bind_with_retry(
 /// let (addr, timeout, threads) = tidepool::initialize(7878, 8);
 /// ```
 pub fn initialize(port: u16, number_of_threads: usize) -> (SocketAddrV4, Duration, usize) {
-    let local_host = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    let local_host = SocketAddrV4::new(Ipv4Addr::new(127,0,0,1), port);
     let timeout = Duration::from_secs(5);
 
     println!(
