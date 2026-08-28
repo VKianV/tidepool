@@ -102,20 +102,19 @@ struct Worker {
 impl Worker {
     /// Creates a new worker thread that continuously receives jobs from the shared receiver.
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Self {
-        let thread = thread::spawn(move || loop {
-            let message = receiver
-                .lock()
-                .expect("failed to acquire the lock")
-                .recv();
+        let thread = thread::spawn(move || {
+            loop {
+                let message = receiver.lock().expect("failed to acquire the lock").recv();
 
-            match message {
-                Ok(job) => {
-                    println!("Worker {id} got a job; executing.");
-                    job();
-                }
-                Err(_) => {
-                    println!("Worker {id} disconnected; shutting down.");
-                    break;
+                match message {
+                    Ok(job) => {
+                        println!("Worker {id} got a job; executing.");
+                        job();
+                    }
+                    Err(_) => {
+                        println!("Worker {id} disconnected; shutting down.");
+                        break;
+                    }
                 }
             }
         });

@@ -16,11 +16,11 @@
 //! Then visit `http://127.0.0.1:7878/` in your browser.
 
 use riotpool::ThreadPool;
-use tidepool::{bind_with_retry, handle_connection, initializing};
+use tidepool::{bind_with_retry, handle_connection, initialize};
 
 fn main() {
     // Initialize configuration: ip localhost(127.0.0.1), port 7878, 8 worker threads
-    let (local_host, timeout, number_of_threads) = initializing(7878, 8);
+    let (local_host, timeout, number_of_threads) = initialize(7878, 8);
 
     // Bind to the address with retry logic in case the port is temporarily busy
     let listener = bind_with_retry(timeout, local_host)

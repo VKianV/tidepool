@@ -8,13 +8,199 @@
 //! This crate is intended to be used alongside the `riotpool` an in house thread pool.
 
 use std::{
+    collections::HashMap,
     fs,
     io::{self, BufRead, BufReader, Write},
     net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream},
-    path::Path,
+    path::PathBuf,
     thread,
     time::{Duration, Instant},
 };
+
+#[derive(Debug)]
+enum HttpMethod {
+    Connect,
+    Delete,
+    Get,
+    Head,
+    Options,
+    Patch,
+    Post,
+    Put,
+    Trace,
+}
+
+#[derive(Debug)]
+struct RequestLine {
+    http_method: HttpMethod,
+    request_uri: String,
+    http_version: String,
+}
+
+impl RequestLine {
+    fn new(request_line: String) -> Self {
+        let (mut phrases, http_method, request_uri, http_version);
+
+        phrases = request_line.splitn(3, ' ');
+
+        http_method = match phrases
+            .next()
+            .expect("failed to read http method")
+            .to_lowercase()
+            .as_str()
+        {
+            "get" => HttpMethod::Get,
+            "post" => HttpMethod::Post,
+            "connect" => HttpMethod::Connect,
+            "patch" => HttpMethod::Patch,
+            "delete" => HttpMethod::Delete,
+            "head" => HttpMethod::Head,
+            "put" => HttpMethod::Put,
+            "options" => HttpMethod::Options,
+            "trace" => HttpMethod::Trace,
+            _ => panic!("invalid http method"),
+        };
+
+        request_uri = phrases
+            .next()
+            .expect("failed to read request uri")
+            .to_string();
+
+        http_version = phrases
+            .next()
+            .expect("failed to read http version")
+            .to_string();
+
+        Self {
+            http_method,
+            request_uri,
+            http_version,
+        }
+    }
+}
+
+type HttpHeaders = HashMap<String, String>;
+
+#[derive(Debug)]
+struct Request {
+    request_line: RequestLine,
+    headers: HttpHeaders,
+    body: String,
+}
+
+impl Request {
+    fn new(stream: &TcpStream) -> Self {
+        let (mut reader, request_line, headers, content_length, body);
+
+        reader = BufReader::new(stream).lines();
+
+        request_line = RequestLine::new(
+            reader
+                .next()
+                .expect("failed to unwrap option")
+                .expect("failed to unwrap result"),
+        );
+
+        headers = reader
+            .by_ref()
+            .map(|l| l.expect("read error"))
+            .take_while(|l| !l.is_empty())
+            .map(|line| {
+                let (key, val) = line
+                    .split_once(':')
+                    .expect("invalid header format: missing a :");
+                (key.trim().to_lowercase(), val.trim().to_string())
+            })
+            .collect::<HttpHeaders>();
+
+        content_length = headers
+            .get("content-length")
+            .and_then(|val| val.parse::<usize>().ok())
+            .unwrap_or(0);
+
+        body = if content_length > 0 {
+            reader
+                .map(|l| l.unwrap())
+                .take_while(|line| !line.is_empty())
+                .collect()
+        } else {
+            String::from("")
+        };
+
+        Self {
+            request_line,
+            headers,
+            body,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ResponseLine {
+    http_version: String,
+    status_code: String,
+    reason_phrase: String,
+}
+
+impl ResponseLine {
+    fn new(line: String) -> Self {
+        let mut parts = line.splitn(3, ' ');
+
+        Self {
+            http_version: parts.next().unwrap_or("").to_string(),
+            status_code: parts.next().unwrap_or("").to_string(),
+            reason_phrase: parts.next().unwrap_or("").to_string(),
+        }
+    }
+    fn gen_req_line(&self) -> String {
+        format!(
+            "{} {} {}",
+            self.http_version, self.status_code, self.reason_phrase
+        )
+    }
+}
+
+#[derive(Debug)]
+struct Response {
+    response_line: ResponseLine,
+    headers: HttpHeaders,
+    body: String,
+}
+
+impl Response {
+    fn new(line: String) -> Self {
+        Self {
+            response_line: ResponseLine::new(line),
+            headers: HashMap::new(),
+            body: String::from(""),
+        }
+    }
+    fn add_header(&mut self, key: String, value: String) {
+        self.headers.insert(key, value);
+    }
+
+    fn add_body(&mut self, content: String) {
+        self.body = content;
+    }
+
+    fn headers_to_string(&self) -> String {
+        self.headers
+            .iter()
+            .map(|(k, v)| format!("{k}: {v}\n"))
+            .collect()
+    }
+    fn send(self, stream: &mut TcpStream) {
+        let content = format!(
+            "{}\n{}\n{}",
+            self.response_line.gen_req_line(),
+            self.headers_to_string(),
+            self.body
+        );
+        stream
+            .write_all(content.as_bytes())
+            .expect("failed to send the response");
+    }
+}
 
 /// Handles a single TCP connection by reading the request line,
 /// determining the appropriate response, and writing it back to the client.
@@ -38,56 +224,44 @@ use std::{
 /// tidepool::handle_connection(stream);
 /// ```
 pub fn handle_connection(mut stream: TcpStream) {
-    let request_line = BufReader::new(&stream)
-        .lines()
-        .next()
-        .expect("failed to get the next item")
-        .expect("failed to read from stream");
+    let (req, mut resp, mut path, file, status_line);
 
-    let full_path;
-    let (status_line, filename) =
-        if request_line.starts_with("GET ") && request_line.ends_with(" HTTP/1.1") {
-            let path = request_line[4..request_line.len() - 9].trim(); // extract /path
+    req = Request::new(&stream);
+    path = PathBuf::from("./public/pages/");
 
-            if path == "/" || path.is_empty() {
-                ("HTTP/1.1 200 OK", "public/index.html")
-            } else if path == "/sleep" {
-                thread::sleep(Duration::from_secs(5));
-                ("HTTP/1.1 200 OK", "public/index.html")
-            } else {
-                // Serve any other file from the "public" directory
-                let sanitized_path = if path.starts_with('/') {
-                    &path[1..]
-                } else {
-                    path
-                };
-
-                // Basic security: prevent directory traversal
-                if sanitized_path.contains("..") || sanitized_path.contains('\\') {
-                    ("HTTP/1.1 400 BAD REQUEST", "public/400.html")
-                } else {
-                    full_path = format!("public/{}", sanitized_path);
-
-                    // If file exists → serve it, else 404
-                    if Path::new(&full_path).exists() {
-                        ("HTTP/1.1 200 OK", full_path.as_str())
-                    } else {
-                        ("HTTP/1.1 404 NOT FOUND", "public/404.html")
-                    }
+    match req.request_line.request_uri.as_str() {
+        "/" | "/home" => {
+            path.push("home/home.html");
+            status_line = "HTTP/1.1 200 Ok"
+        }
+        "/sleep" => {
+            thread::sleep(Duration::from_secs(5));
+            path.push("home/home.html");
+            status_line = "HTTP/1.1 200 OK";
+        }
+        uri => {
+            let address = path.join(uri.trim_start_matches('/'));
+            match address.exists(){
+                true => {
+                    path.push(uri.trim_start_matches('/'));
+                    status_line = "HTTP/1.1 200 OK";
                 }
-            }
-        } else {
-            ("HTTP/1.1 400 BAD REQUEST", "public/400.html")
-        };
+                false => {
+                    path.push("status code pages/404.html");
+                    status_line = "HTTP/1.1 404 OK"
+                }
+            };
+        }
+    };
+    dbg!("second path is",&path);
 
-    // Rest remains the same...
-    let body = fs::read_to_string(filename).expect("failed to read the file");
-    let body_length = body.len();
-    let response = format!("{status_line}\r\nContent-Length: {body_length}\r\n\r\n{body}");
+    file = fs::read_to_string(path).expect("could not read the file");
 
-    stream
-        .write_all(response.as_bytes())
-        .expect("failed to write to stream");
+    resp = Response::new(status_line.to_string());
+    resp.add_header("Content-Length".to_string(), file.len().to_string());
+    resp.add_body(file);
+
+    resp.send(&mut stream);
 }
 
 /// Attempts to bind a `TcpListener` to the given address, retrying every 300ms
@@ -138,10 +312,10 @@ pub fn bind_with_retry(
 /// # Examples
 ///
 /// ```no_run
-/// let (addr, timeout, threads) = tidepool::initializing(7878, 8);
+/// let (addr, timeout, threads) = tidepool::initialize(7878, 8);
 /// ```
-pub fn initializing(port: u16, number_of_threads: usize) -> (SocketAddrV4, Duration, usize) {
-    let local_host = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+pub fn initialize(port: u16, number_of_threads: usize) -> (SocketAddrV4, Duration, usize) {
+    let local_host = SocketAddrV4::new(Ipv4Addr::new(127,0,0,1), port);
     let timeout = Duration::from_secs(5);
 
     println!(
@@ -152,4 +326,3 @@ pub fn initializing(port: u16, number_of_threads: usize) -> (SocketAddrV4, Durat
 
     (local_host, timeout, number_of_threads)
 }
-
